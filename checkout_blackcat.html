@@ -2221,13 +2221,24 @@
                 // - items (mín. 1 item)
                 // - customer (sem expor API key no front; quem assina é o /api/blackcat no backend)
                 // - shipping obrigatório quando tangible:true
+                utmifyTrackingParams = getTrackingParams();
+
                 const payload = {
                     amount: PIX_AMOUNT_CENTS,
                     currency: 'BRL',
                     paymentMethod: 'pix',
-                    postbackUrl: 'https://seusite.com/api/blackcat/webhook',
+                    postbackUrl: `${location.origin}/api/blackcat-webhook`,
                     externalRef: pedidoId,
                     metadata: `{ orderId: "${pedidoId}" }`,
+
+                    utm_source: utmifyTrackingParams.utm_source || undefined,
+                    utm_medium: utmifyTrackingParams.utm_medium || undefined,
+                    utm_campaign: utmifyTrackingParams.utm_campaign || undefined,
+                    utm_content: utmifyTrackingParams.utm_content || undefined,
+                    utm_term: utmifyTrackingParams.utm_term || undefined,
+                    src: utmifyTrackingParams.src || undefined,
+                    sck: utmifyTrackingParams.sck || undefined,
+
                     customer: {
                         name: nome,
                         email: email,
