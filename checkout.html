@@ -2238,7 +2238,7 @@
                     items: [{
                         title: 'Colar Pérola Negra - 7mm',
                         quantity: 1,
-                        tangible: true,
+                        tangible: false,
                         unitPrice: PIX_AMOUNT_CENTS,
                         externalRef: 'item-1'
                     }]
@@ -2252,10 +2252,10 @@
                     body: JSON.stringify(payload)
                 });
 
-                const data = await resp.json();
                 if (!resp.ok) {
                     console.error('Erro BlackCat:', data);
-                    alert('Erro ao gerar Pix. Verifique suas chaves/conta e tente novamente.');
+                    const msg = data?.details || data?.message || data?.error || 'Erro ao gerar Pix.';
+                    alert(msg);
                     modal.classList.add('hidden');
                     return;
                 }
