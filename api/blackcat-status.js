@@ -1,31 +1,34 @@
-// /api/blackcat-status.js
-
 export default async function handler(req, res) {
-  if (req.method !== "GET") return res.status(405).json({ error: "Método não permitido" });
+  if (req.method !== 'GET') {
+    return res.status(405).json({ success: false, message: 'Method Not Allowed' });
+  }
 
   try {
     const apiKey = process.env.BLACKCAT_API_KEY;
-    if (!apiKey) return res.status(500).json({ error: "BLACKCAT_API_KEY não configurada" });
+    if (!apiKey) {
+      return res.status(500).json({ success: false, message: 'Missing BLACKCAT_API_KEY env var' });
+    }
 
-    const { transaction_id } = req.query;
-    if (!transaction_id) return res.status(400).json({ error: "transaction_id é obrigatório" });
+    const transactionId = String(req.query.transaction_id || '').trim();
+    if (!transactionId) {
+      return res.status(400).json({ success: false, message: 'transaction_id is required' });
+    }
 
-    const url = `https://api.blackcatpagamentos.online/api/sales/${encodeURIComponent(
-      String(transaction_id)
-    )}/status`;
+    const url = `https://api.blackcatpagamentos.online/api/sales/${encodeURIComponent(transactionId)}/status`;
 
-    const response = await fetch(url, {
-      method: "GET",
+    const upstream = await fetch(url, {
+      method: 'GET',
       headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": apiKey,
+        'X-API-Key': apiKey,
       },
     });
 
-    const text = await response.text();
-    const result = text ? JSON.parse(text) : {};
-    return res.status(response.status).json(result);
-  } catch (e) {
-    return res.status(500).json({ error: "Erro ao consultar status", details: String(e?.message || e) });
+    const text = await upstream.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = { raw: text }; }
+
+    return res.status(upstream.status).json(data);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Server error', error: String(err) });
   }
 }
