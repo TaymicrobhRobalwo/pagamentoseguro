@@ -2246,11 +2246,13 @@
 
                 const resp = await fetch('/api/blackcat', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
+
+                const raw = await resp.text();
+                let data = {};
+                try { data = raw ? JSON.parse(raw) : {}; } catch { data = { raw }; }
 
                 if (!resp.ok) {
                     console.error('Erro BlackCat:', data);
