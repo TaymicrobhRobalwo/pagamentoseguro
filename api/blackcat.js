@@ -1,49 +1,48 @@
-// api/blackcat.js
+// /api/blackcat.js
 
 function onlyDigits(v) {
     return String(v || "").replace(/\D/g, "");
 }
 
 function hasTangibleItem(items) {
-    if (!Array.isArray(items)) return false;
-    return items.some((it) => it && it.tangible === true);
+    return Array.isArray(items) && items.some((it) => it && it.tangible === true);
 }
 
 function mapToCreateSalePayload(frontPayload) {
     const p = frontPayload || {};
 
     const amount = Number(p.amount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-        throw new Error("amount inválido (deve ser inteiro em centavos)");
-    }
-
-    const paymentMethodRaw = String(p.paymentMethod || "PIX").trim();
-    const paymentMethod =
-        paymentMethodRaw.toLowerCase() === "pix" ? "PIX" : paymentMethodRaw.toUpperCase();
-
-    const currency = p.currency || "BRL";
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error("amount inválido (centavos)");
 
     const items = Array.isArray(p.items) ? p.items : [];
-    if (!items.length) {
-        throw new Error("items é obrigatório (mínimo 1 item)");
-    }
+    if (!items.length) throw new Error("items é obrigatório (mínimo 1)");
 
     const customer = p.customer || {};
+
+    // ✅ aqui é o ponto crítico: seu checkout manda document como objeto {type, number}
+    const docFromFront =
+        (customer.document && typeof customer.document === "object")
+            ? customer.document.number
+            : customer.document;
+
     const mappedCustomer = {
-        name: customer.name || "Cliente",
-        email: customer.email || "cliente@example.com",
+        name: customer.name || "",
+        email: customer.email || "",
         phone: onlyDigits(customer.phone || ""),
-        ...(customer.document ? { document: customer.document } : {}),
+        document: onlyDigits(docFromFront || ""), // ✅ garante CPF em string numérica
     };
+
+    // Blackcat costuma rejeitar se campos básicos vierem vazios
+    if (!mappedCustomer.name || !mappedCustomer.email || !mappedCustomer.phone || !mappedCustomer.document) {
+        throw new Error("Campos do cliente incompletos (name/email/phone/document)");
+    }
 
     const needsShipping = hasTangibleItem(items);
     const addr = customer?.address || null;
 
     let shipping;
     if (needsShipping) {
-        if (!addr) {
-            throw new Error("shipping é obrigatório quando há item tangible:true (faltou customer.address no payload)");
-        }
+        if (!addr) throw new Error("shipping obrigatório (item tangible:true) e customer.address está vazio");
 
         shipping = {
             street: addr.street || "",
@@ -55,16 +54,21 @@ function mapToCreateSalePayload(frontPayload) {
             state: addr.state || "",
             country: addr.country || "BR",
         };
+
+        // Evita envio de shipping vazio
+        if (!shipping.street || !shipping.streetNumber || !shipping.zipCode || !shipping.city || !shipping.state) {
+            throw new Error("Endereço incompleto (street/number/zip/city/state)");
+        }
     }
 
-    const out = {
+    return {
         amount,
-        currency,
-        paymentMethod,
+        currency: p.currency || "BRL",
+        paymentMethod: "PIX", // ✅ força PIX como na doc/retorno
         items,
         customer: mappedCustomer,
-        ...(p.pix ? { pix: p.pix } : {}),
         ...(needsShipping ? { shipping } : {}),
+        ...(p.pix ? { pix: p.pix } : {}),
         ...(p.metadata ? { metadata: p.metadata } : {}),
         ...(p.postbackUrl ? { postbackUrl: p.postbackUrl } : {}),
         ...(p.externalRef ? { externalRef: p.externalRef } : {}),
@@ -74,66 +78,40 @@ function mapToCreateSalePayload(frontPayload) {
         ...(p.utm_content ? { utm_content: p.utm_content } : {}),
         ...(p.utm_term ? { utm_term: p.utm_term } : {}),
     };
-
-    return out;
 }
 
-// Garante que o front receba sempre tx.id e tx.pix.qrcode
 function normalizeForFrontend(apiResult) {
     const root = apiResult || {};
     const data = root.data || root;
 
-    const transactionId =
-        data.transactionId || data.id || root.transactionId || root.id || null;
+    const transactionId = data.transactionId || data.id || root.transactionId || root.id || null;
 
-    // Tentativas comuns para "copia e cola" Pix
     const pixObj = data.pix || root.pix || {};
-    const qrcode =
-        pixObj.qrcode ||
-        pixObj.qrCode ||
-        pixObj.copyPaste ||
-        pixObj.code ||
-        data.qrcode ||
-        data.qrCode ||
-        data.pixCode ||
+    const pixCode =
+        pixObj.qrcode || pixObj.qrCode || pixObj.copyPaste || pixObj.code ||
+        data.qrcode || data.qrCode || data.pixCode ||
         null;
 
-    // Se a resposta vier sem pix, ainda devolvemos o corpo original, mas com campos normalizados quando possível
     const normalizedData = {
         ...data,
         id: data.id || transactionId,
-        transactionId: transactionId || data.transactionId,
-        pix: {
-            ...(pixObj || {}),
-            qrcode: pixObj.qrcode || qrcode,
-        },
+        transactionId: data.transactionId || transactionId,
+        pix: { ...pixObj, qrcode: pixObj.qrcode || pixCode },
     };
 
-    // Mantém o envelope original (success, message etc.) e substitui data
-    if (root.data) {
-        return { ...root, data: normalizedData };
-    }
-    return normalizedData;
+    return root.data ? { ...root, data: normalizedData } : normalizedData;
 }
 
 export default async function handler(req, res) {
-    if (req.method !== "POST") {
-        return res.status(405).json({ error: "Método não permitido" });
-    }
+    if (req.method !== "POST") return res.status(405).json({ error: "Método não permitido" });
 
     try {
         const apiKey = process.env.BLACKCAT_API_KEY;
-        if (!apiKey) {
-            return res.status(500).json({
-                error: "BLACKCAT_API_KEY não configurada no servidor",
-            });
-        }
+        if (!apiKey) return res.status(500).json({ error: "BLACKCAT_API_KEY não configurada" });
 
         const payload = mapToCreateSalePayload(req.body);
 
-        const url = "https://api.blackcatpagamentos.online/api/sales/create-sale";
-
-        const response = await fetch(url, {
+        const response = await fetch("https://api.blackcatpagamentos.online/api/sales/create-sale", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -143,22 +121,11 @@ export default async function handler(req, res) {
         });
 
         const text = await response.text();
-        let result;
-        try {
-            result = text ? JSON.parse(text) : {};
-        } catch {
-            result = { raw: text };
-        }
+        const result = text ? JSON.parse(text) : {};
 
-        // 🔥 Normaliza para o checkout não quebrar
         const normalized = normalizeForFrontend(result);
-
         return res.status(response.status).json(normalized);
-    } catch (error) {
-        console.error("ERRO BLACKCAT (create-sale):", error);
-        return res.status(500).json({
-            error: "Erro ao criar venda Pix",
-            details: String(error?.message || error),
-        });
+    } catch (e) {
+        return res.status(500).json({ error: "Erro ao criar venda Pix", details: String(e?.message || e) });
     }
 }

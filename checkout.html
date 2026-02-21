@@ -1125,7 +1125,7 @@
                     </div>
 
 
-                    <button class="btn-main" onclick="goToStep(2)">Continuar</button>
+                    <button class="btn-main" onclick="validateStep1AndContinue()">Continuar</button>
                 </div>
 
                 <div class="benefits">
@@ -2432,6 +2432,42 @@
                 suggestionsBox.style.display = "none";
             }
         });
+
+        function validateStep1AndContinue() {
+            const nome = document.getElementById('nome-completo').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const cpf = document.getElementById('cpf-pagador').value.replace(/\D/g, '');
+            const whatsapp = document.getElementById('whatsapp').value.replace(/\D/g, '');
+
+            // Regras mínimas (pra não deixar passar payload inválido)
+            if (!nome || nome.length < 5) {
+                alert('Preencha seu nome completo.');
+                document.getElementById('nome-completo').focus();
+                return;
+            }
+
+            if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                alert('Preencha um e-mail válido.');
+                document.getElementById('email').focus();
+                return;
+            }
+
+            if (!cpf || cpf.length !== 11) {
+                alert('Preencha um CPF válido (11 dígitos).');
+                document.getElementById('cpf-pagador').focus();
+                return;
+            }
+
+            if (!whatsapp || whatsapp.length < 10) {
+                alert('Preencha seu WhatsApp com DDD.');
+                document.getElementById('whatsapp').focus();
+                return;
+            }
+
+            // ✅ passou
+            goToStep(2);
+        }
+
     </script>
 
 
