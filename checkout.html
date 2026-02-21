@@ -2197,11 +2197,11 @@
                 // DASHBOARD: checkout iniciado
                 trackEvent('checkout_started', { order_id: pedidoId });
 
-                const nome = document.getElementById('nome-completo').value || 'Cliente';
+                const nome = document.getElementById('nome-completo').value || 'Cliente Teste';
                 const email = document.getElementById('email').value || 'cliente@example.com';
-                const telefone = document.getElementById('whatsapp').value || '';
+                const telefone = document.getElementById('whatsapp').value || '11998745663';
                 const telefoneDigits = telefone.replace(/\D/g, '');
-                const cpf = document.getElementById('cpf-pagador').value || '';
+                const cpf = document.getElementById('cpf-pagador').value || '95838040025';
                 const cpfDigits = cpf.replace(/\D/g, '');
 
                 const cep = document.getElementById('cep').value.replace(/\D/g, '');
